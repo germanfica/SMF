@@ -3,6 +3,8 @@ set -eu
 
 config_dir=/var/www/smf-config
 template_dir=/usr/src/smf-config-template
+content_dir=/var/www/smf-content
+content_template_dir=/usr/src/smf-content-template
 
 configure_default_settings_paths() {
 	settings_file="$1"
@@ -42,5 +44,16 @@ for settings_file in Settings.php Settings_bak.php; do
 	chown www-data:www-data "${target_file}"
 	chmod 0660 "${target_file}"
 done
+
+agreement_file="${content_dir}/agreement.txt"
+
+if [ ! -f "${agreement_file}" ]; then
+	install -o www-data -g www-data -m 0640 \
+		"${content_template_dir}/agreement.txt" "${agreement_file}"
+fi
+
+chown www-data:www-data "${agreement_file}"
+chmod 0640 "${agreement_file}"
+chown -R www-data:www-data /var/www/html/custom_avatar
 
 exec docker-php-entrypoint "$@"

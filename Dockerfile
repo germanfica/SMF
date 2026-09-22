@@ -37,7 +37,7 @@ RUN set -eux; \
 	rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
-	mkdir -p /tmp/smf-source /usr/src/smf-config-template /var/www/smf-config; \
+	mkdir -p /tmp/smf-source /usr/src/smf-config-template /usr/src/smf-content-template /var/www/smf-config; \
 	curl --fail --location --retry 5 --retry-all-errors --output /tmp/smf.tar.gz \
 		"https://github.com/SimpleMachines/SMF/archive/refs/tags/${SMF_SOURCE_REF}.tar.gz"; \
 	echo "${SMF_SOURCE_SHA256}  /tmp/smf.tar.gz" | sha256sum --check --strict; \
@@ -46,17 +46,21 @@ RUN set -eux; \
 	cp -a /tmp/smf-source/. /var/www/html/; \
 	install -m 0640 /tmp/smf-source/other/Settings.php /usr/src/smf-config-template/Settings.php; \
 	install -m 0640 /tmp/smf-source/other/Settings_bak.php /usr/src/smf-config-template/Settings_bak.php; \
+	install -m 0640 /tmp/smf-source/agreement.txt /usr/src/smf-content-template/agreement.txt; \
 	install -m 0644 /tmp/smf-source/other/install.php /var/www/html/install.php; \
 	install -m 0644 /tmp/smf-source/other/install_2-1_mysql.sql /var/www/html/install_2-1_mysql.sql; \
 	install -m 0644 /tmp/smf-source/other/install_2-1_postgresql.sql /var/www/html/install_2-1_postgresql.sql; \
 	rm -rf /var/www/html/other /tmp/smf-source /tmp/smf.tar.gz; \
 	ln -s /var/www/smf-config/Settings.php /var/www/html/Settings.php; \
 	ln -s /var/www/smf-config/Settings_bak.php /var/www/html/Settings_bak.php; \
+	rm /var/www/html/agreement.txt; \
+	ln -s /var/www/smf-content/agreement.txt /var/www/html/agreement.txt; \
 	chown -R root:root /var/www/html; \
 	chown -R www-data:www-data \
 		/var/www/html/attachments \
 		/var/www/html/avatars \
 		/var/www/html/cache \
+		/var/www/html/custom_avatar \
 		/var/www/html/Packages \
 		/var/www/html/Smileys \
 		/var/www/html/Themes; \

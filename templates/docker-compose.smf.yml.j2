@@ -50,9 +50,11 @@ services:
         condition: service_healthy
     volumes:
       - smf-config:/var/www/smf-config
+      - smf-content:/var/www/smf-content
       - smf-attachments:/var/www/html/attachments
       - smf-avatars:/var/www/html/avatars
       - smf-cache:/var/www/html/cache
+      - smf-custom-avatar:/var/www/html/custom_avatar
       - smf-packages:/var/www/html/Packages
       - smf-smileys:/var/www/html/Smileys
       - smf-themes:/var/www/html/Themes
@@ -93,9 +95,11 @@ secrets:
 volumes:
   smf-mysql-data:
   smf-config:
+  smf-content:
   smf-attachments:
   smf-avatars:
   smf-cache:
+  smf-custom-avatar:
   smf-packages:
   smf-smileys:
   smf-themes:
