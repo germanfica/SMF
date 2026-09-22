@@ -1,10 +1,11 @@
-SMF_IMAGE_NAME: "smf"
-SMF_IMAGE_TAG: "2.1.7"
+# SMF_IMAGE_NAME: "smf"
+# SMF_IMAGE_TAG: "2.1.7"
 
 # Ruta absoluta, en tu PC, al archivo creado con `docker image save`.
-SMF_IMAGE_TAR: "/home/germa/proyectos/smf/smf-2.1.7.tar"
+# SMF_IMAGE_TAR: "/home/germa/proyectos/smf/smf-2.1.7.tar"
 
-# Prueba: no las reutilices en producción.
+# Prueba sin cifrar: no reutilices estas claves en producción.
+# La imagen, el archivo y sus pines están en vars/smf-build.yml.
 # Deben tener 24 caracteres o más.
 SMF_DB_PASSWORD: "smf-prueba-clave-2026-local"
 SMF_MYSQL_ROOT_PASSWORD: "mysql-root-prueba-2026-local"
