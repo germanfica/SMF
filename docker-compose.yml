@@ -28,7 +28,7 @@ services:
         - CMD-SHELL
         - >-
           mysqladmin ping --protocol=tcp -h 127.0.0.1 -u root
-          --password="$(cat "$MYSQL_ROOT_PASSWORD_FILE")" --silent
+          --password="$(cat "$$MYSQL_ROOT_PASSWORD_FILE")" --silent
       interval: 10s
       timeout: 5s
       retries: 12
@@ -72,8 +72,8 @@ services:
       test:
         - CMD-SHELL
         - >-
-          php -r '$socket = @fsockopen("127.0.0.1", 80, $errno, $error, 3);
-          if ($socket === false) { exit(1); } fclose($socket);'
+          php -r '$$socket = @fsockopen("127.0.0.1", 80, $$errno, $$error, 3);
+          if ($$socket === false) { exit(1); } fclose($$socket);'
       interval: 15s
       timeout: 5s
       retries: 8
