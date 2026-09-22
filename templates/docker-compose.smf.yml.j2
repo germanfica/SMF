@@ -1,4 +1,4 @@
-name: "{{ SMF_APP_NAME }}"
+name: "{{ APP_NAME }}"
 
 services:
   database:
@@ -65,7 +65,7 @@ services:
     networks:
       proxy:
         aliases:
-          - "{{ SMF_APP_NAME }}"
+          - "{{ APP_NAME }}"
       database: {}
     read_only: true
     security_opt:

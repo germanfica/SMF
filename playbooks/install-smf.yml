@@ -10,8 +10,10 @@
     - "{{ playbook_dir }}/../vars/smf-build.yml"
 
   vars:
-    SMF_APP_NAME: smf
-    SMF_BASE_PATH: "/opt/{{ SMF_APP_NAME }}"
+    APP_NAME: smf
+    APP_USER: "{{ APP_NAME }}"
+    APP_GROUP: "{{ APP_NAME }}"
+    SMF_BASE_PATH: "/opt/{{ APP_NAME }}"
     SMF_SECRETS_PATH: "{{ SMF_BASE_PATH }}/secrets"
     SMF_DB_NAME: smf
     SMF_DB_USER: smf
@@ -96,12 +98,25 @@
       changed_when: false
 
   tasks:
+    - name: Create the SMF application group
+      ansible.builtin.group:
+        name: "{{ APP_GROUP }}"
+        system: true
+
+    - name: Create the SMF application user
+      ansible.builtin.user:
+        name: "{{ APP_USER }}"
+        group: "{{ APP_GROUP }}"
+        system: true
+        create_home: false
+        shell: /bin/false
+
     - name: Create SMF deployment directories
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: directory
-        owner: root
-        group: root
+        owner: "{{ APP_USER }}"
+        group: "{{ APP_GROUP }}"
         mode: "{{ item.mode }}"
       loop:
         - path: "{{ SMF_BASE_PATH }}"
@@ -113,8 +128,8 @@
       ansible.builtin.copy:
         content: "{{ item.value }}\n"
         dest: "{{ SMF_SECRETS_PATH }}/{{ item.name }}"
-        owner: root
-        group: root
+        owner: "{{ APP_USER }}"
+        group: "{{ APP_GROUP }}"
         mode: "0600"
       loop:
         - name: mysql_password
@@ -196,8 +211,8 @@
       ansible.builtin.template:
         src: "{{ SMF_COMPOSE_TEMPLATE_SRC }}"
         dest: "{{ SMF_BASE_PATH }}/docker-compose.yml"
-        owner: root
-        group: root
+        owner: "{{ APP_USER }}"
+        group: "{{ APP_GROUP }}"
         mode: "0600"
 
     - name: Validate rendered SMF Docker Compose configuration
