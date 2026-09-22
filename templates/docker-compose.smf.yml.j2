@@ -1,0 +1,108 @@
+name: "{{ SMF_APP_NAME }}"
+
+services:
+  database:
+    image: "{{ SMF_MYSQL_IMAGE }}"
+    restart: unless-stopped
+    init: true
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-name-resolve
+    environment:
+      MYSQL_DATABASE: "{{ SMF_DB_NAME }}"
+      MYSQL_USER: "{{ SMF_DB_USER }}"
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+    secrets:
+      - mysql_password
+      - mysql_root_password
+    volumes:
+      - smf-mysql-data:/var/lib/mysql
+    networks:
+      - database
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mysqladmin ping --protocol=tcp -h 127.0.0.1 -u root
+          --password="$(cat "$MYSQL_ROOT_PASSWORD_FILE")" --silent
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  smf:
+    image: "{{ SMF_IMAGE_NAME }}:{{ SMF_IMAGE_TAG }}"
+    restart: unless-stopped
+    init: true
+    expose:
+      - "80"
+    depends_on:
+      database:
+        condition: service_healthy
+    volumes:
+      - smf-config:/var/www/smf-config
+      - smf-attachments:/var/www/html/attachments
+      - smf-avatars:/var/www/html/avatars
+      - smf-cache:/var/www/html/cache
+      - smf-packages:/var/www/html/Packages
+      - smf-smileys:/var/www/html/Smileys
+      - smf-themes:/var/www/html/Themes
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+      - /var/run/apache2:rw,noexec,nosuid,size=16m,mode=0755
+      - /var/lock/apache2:rw,noexec,nosuid,size=16m,mode=0755
+    networks:
+      proxy:
+        aliases:
+          - "{{ SMF_APP_NAME }}"
+      database: {}
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          php -r '$socket = @fsockopen("127.0.0.1", 80, $errno, $error, 3);
+          if ($socket === false) { exit(1); } fclose($socket);'
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+secrets:
+  mysql_password:
+    file: ./secrets/mysql_password
+  mysql_root_password:
+    file: ./secrets/mysql_root_password
+
+volumes:
+  smf-mysql-data:
+  smf-config:
+  smf-attachments:
+  smf-avatars:
+  smf-cache:
+  smf-packages:
+  smf-smileys:
+  smf-themes:
+
+networks:
+  proxy:
+    name: "{{ SMF_PROXY_NETWORK }}"
+    external: true
+  database:
+    internal: true
