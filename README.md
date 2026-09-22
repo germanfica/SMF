@@ -11,6 +11,12 @@ network. There is deliberately no host port published by this Compose project.
 TLS must terminate at the proxy: the PHP configuration marks session cookies
 as secure.
 
+## Create archive
+
+```bash
+tar -czf ../smf.tar.gz . && mv ../smf.tar.gz ./smf.tar.gz
+```
+
 ## Initial setup
 
 Store these inventory variables with Ansible Vault. Use independently generated
