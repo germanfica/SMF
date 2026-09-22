@@ -1,4 +1,5 @@
----
+# ansible-playbook -i inventory.yml install-smf.yml --ask-become-pass --ask-vault-pass -e SMF_INSTALLER_ENABLED=true
+# ansible-playbook -i inventory/hosts.yml playbooks/install-smf.yml --ask-become-pass -e SMF_INSTALLER_ENABLED=true
 - name: Deploy SMF with Docker Compose
   hosts: "{{ TARGET_HOSTS | default('smf') }}"
   become: true
