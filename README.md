@@ -11,6 +11,8 @@ network. There is deliberately no host port published by this Compose project.
 TLS must terminate at the proxy: the PHP configuration marks session cookies
 as secure.
 
+<img width="1354" height="756" alt="Screenshot from 2026-09-22 04-47-04" src="https://github.com/user-attachments/assets/20257e9e-04d4-4228-aa48-149136fa00d8" />
+
 ## Create archive
 
 ```bash
