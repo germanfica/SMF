@@ -73,9 +73,13 @@ services:
 ```
 
 The base Compose file remains responsible for `expose: ["80"]`; there is no
-flag to remove or alter that internal service port. A published port is bound
-on all host interfaces, so place it behind the intended firewall or reverse
-proxy policy.
+flag to remove or alter that internal service port. The managed override
+replaces any previously rendered `ports` list, so changing from `8080` to
+`8090`, or returning to Docker-network-only mode, removes the old host
+publication instead of retaining it. The deployment requires Docker Compose
+2.24.4 or newer and verifies the resulting host-port state after it starts
+SMF. A published port is bound on all host interfaces, so place it behind the
+intended firewall or reverse proxy policy.
 
 ## Ansible bootstrap
 
@@ -107,7 +111,10 @@ already running as root. Override that with `--ask-become-pass` or
 `--no-ask-become-pass`.
 
 The initial command enables SMF's web installer. After completing the browser
-setup, deploy again with the installer disabled. Keep the same `--port` option
+setup, deploy again with the installer disabled. This creates a deployment
+image derived from the pinned SMF image with `install.php` removed, then
+verifies that the running service no longer contains that file. It also keeps
+the existing Apache protection marker disabled. Keep the same `--port` option
 when you use one:
 
 ```bash

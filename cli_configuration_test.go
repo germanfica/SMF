@@ -34,6 +34,25 @@ func TestParseInstallPort(t *testing.T) {
 	}
 }
 
+func TestParseInstallDisablesInstallerWithSelectedPort(t *testing.T) {
+	Configuration, ConfigurationError := ParseCLIConfiguration([]string{"install", "--disable-installer", "--port", "8090", "--apply"})
+	if ConfigurationError != nil {
+		t.Fatal(ConfigurationError)
+	}
+	if Configuration.InstallerEnabled {
+		t.Fatal("--disable-installer must disable the web installer")
+	}
+	if Configuration.ExposureMode != ExposureModePublishedPort {
+		t.Fatalf("exposure mode = %q, want %q", Configuration.ExposureMode, ExposureModePublishedPort)
+	}
+	if Configuration.PublishedPort != 8090 {
+		t.Fatalf("published port = %d, want 8090", Configuration.PublishedPort)
+	}
+	if !Configuration.ApplyChanges {
+		t.Fatal("--apply must enable deployment")
+	}
+}
+
 func TestParseInstallRejectsInvalidPort(t *testing.T) {
 	_, ConfigurationError := ParseCLIConfiguration([]string{"install", "--port", "65536"})
 	if ConfigurationError == nil {
