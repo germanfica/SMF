@@ -8,6 +8,11 @@
   vars_files:
     - "{{ playbook_dir }}/../vars/smf-build.yml"
 
+  vars:
+    # The CLI enables this for a clean host. Docker's group membership does
+    # not take effect in the Ansible process that just created the group.
+    SMF_DOCKER_COMMAND_BECOME: false
+
   pre_tasks:
     - name: Validate fixed SMF build inputs
       ansible.builtin.assert:
@@ -32,6 +37,7 @@
         argv:
           - docker
           - version
+      become: "{{ SMF_DOCKER_COMMAND_BECOME | bool }}"
       changed_when: false
 
     - name: Verify required SMF build inputs
@@ -70,6 +76,7 @@
           - --tag
           - "{{ SMF_IMAGE_NAME }}:{{ SMF_IMAGE_TAG }}"
           - "{{ SMF_PROJECT_PATH }}"
+      become: "{{ SMF_DOCKER_COMMAND_BECOME | bool }}"
       changed_when: true
 
     - name: Verify the built SMF image
@@ -92,6 +99,7 @@
             test -L /var/www/html/Settings.php
             grep -F "SMF_VERSION" /var/www/html/install.php
             grep -F "{{ SMF_VERSION }}" /var/www/html/install.php
+      become: "{{ SMF_DOCKER_COMMAND_BECOME | bool }}"
       changed_when: false
 
     - name: Create the SMF artifact directory
@@ -127,6 +135,7 @@
               - --output
               - "{{ smf_temporary_image_tar.path }}"
               - "{{ SMF_IMAGE_NAME }}:{{ SMF_IMAGE_TAG }}"
+          become: "{{ SMF_DOCKER_COMMAND_BECOME | bool }}"
           changed_when: true
 
         - name: Calculate the SMF image archive checksum

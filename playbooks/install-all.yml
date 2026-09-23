@@ -1,7 +1,9 @@
 ---
-# Complete SMF installation entry point.
-# ansible-playbook -i inventory/hosts.yml playbooks/install-all.yml --ask-become-pass --ask-vault-pass -e SMF_INSTALLER_ENABLED=true
-# ansible-playbook -i inventory/hosts.yml playbooks/install-all.yml --ask-become-pass -e SMF_INSTALLER_ENABLED=true
+# Complete SMF installation entry point. The CLI invokes this playbook after
+# it has validated the checkout and prepared an Ansible control-node runtime.
+#
+# ansible-playbook -i inventory/hosts.yml playbooks/install-all.yml \
+#   --ask-become-pass --ask-vault-pass -e SMF_INSTALLER_ENABLED=true
 
 - name: Install Docker Engine and the Compose plugin
   ansible.builtin.import_playbook: install-docker.yml

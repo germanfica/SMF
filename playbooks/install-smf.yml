@@ -19,6 +19,9 @@
     SMF_DB_USER: smf
     SMF_INSTALLER_ENABLED: false
     SMF_COMPOSE_TEMPLATE_SRC: "{{ playbook_dir }}/../templates/docker-compose.smf.yml.j2"
+    SMF_PUBLISHED_PORT: ""
+    SMF_COMPOSE_PATH: "{{ SMF_BASE_PATH }}/docker-compose.yml"
+    SMF_COMPOSE_PORT_OVERRIDE_PATH: "{{ SMF_BASE_PATH }}/docker-compose.smf.override.yml"
 
   pre_tasks:
     - name: Validate required deployment variables
@@ -36,10 +39,18 @@
           - SMF_DB_PASSWORD | length >= 24
           - SMF_MYSQL_ROOT_PASSWORD is defined
           - SMF_MYSQL_ROOT_PASSWORD | length >= 24
+          - >-
+            (SMF_PUBLISHED_PORT | string | length == 0) or
+            (
+              (SMF_PUBLISHED_PORT | string) is match('^[1-9][0-9]{0,4}$') and
+              (SMF_PUBLISHED_PORT | int) <= 65535
+            )
         fail_msg: >-
           Define SMF_IMAGE_NAME, SMF_IMAGE_TAG, SMF_IMAGE_TAR and
           SMF_IMAGE_TAR_SHA256 in Jenkins,
-          and keep SMF_DB_PASSWORD and SMF_MYSQL_ROOT_PASSWORD encrypted with Ansible Vault.
+          keep SMF_DB_PASSWORD and SMF_MYSQL_ROOT_PASSWORD encrypted with
+          Ansible Vault, and use a TCP port from 1 through 65535 when
+          SMF_PUBLISHED_PORT is set.
       no_log: true
 
     - name: Verify Docker Engine availability
@@ -210,7 +221,20 @@
     - name: Render SMF Docker Compose configuration
       ansible.builtin.template:
         src: "{{ SMF_COMPOSE_TEMPLATE_SRC }}"
-        dest: "{{ SMF_BASE_PATH }}/docker-compose.yml"
+        dest: "{{ SMF_COMPOSE_PATH }}"
+        owner: "{{ APP_USER }}"
+        group: "{{ APP_GROUP }}"
+        mode: "0600"
+
+    - name: Render SMF host port Compose override
+      ansible.builtin.copy:
+        content: |
+          # Managed by install-smf.yml. Do not edit manually.
+          services:
+            smf:{% if SMF_PUBLISHED_PORT | string | length > 0 %}
+              ports:
+                - "{{ SMF_PUBLISHED_PORT }}:80"{% else %} {}{% endif %}
+        dest: "{{ SMF_COMPOSE_PORT_OVERRIDE_PATH }}"
         owner: "{{ APP_USER }}"
         group: "{{ APP_GROUP }}"
         mode: "0600"
@@ -220,6 +244,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_PORT_OVERRIDE_PATH }}"
           - config
           - --quiet
         chdir: "{{ SMF_BASE_PATH }}"
@@ -230,6 +258,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_PORT_OVERRIDE_PATH }}"
           - create
         chdir: "{{ SMF_BASE_PATH }}"
       changed_when: true
@@ -239,6 +271,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_PORT_OVERRIDE_PATH }}"
           - run
           - --rm
           - --no-deps
@@ -256,6 +292,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_PORT_OVERRIDE_PATH }}"
           - run
           - --rm
           - --no-deps
@@ -273,6 +313,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_PORT_OVERRIDE_PATH }}"
           - up
           - --detach
           - --pull
@@ -289,6 +333,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_PORT_OVERRIDE_PATH }}"
           - up
           - --detach
           - --pull
@@ -306,6 +354,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_PORT_OVERRIDE_PATH }}"
           - ps
         chdir: "{{ SMF_BASE_PATH }}"
       changed_when: false
