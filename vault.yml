@@ -1,6 +1,0 @@
-SMF_IMAGE_NAME: "smf"
-SMF_IMAGE_TAG: "2.1.7"
-SMF_IMAGE_TAR: "/ruta/absoluta/al/proyecto/smf-2.1.7.tar"
-
-SMF_DB_PASSWORD: "cambia-esto-por-una-clave-larga-de-prueba"
-SMF_MYSQL_ROOT_PASSWORD: "cambia-esto-por-otra-clave-larga-de-prueba"
