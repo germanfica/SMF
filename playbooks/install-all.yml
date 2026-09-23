@@ -1,0 +1,13 @@
+---
+# Complete SMF installation entry point.
+# ansible-playbook -i inventory/hosts.yml playbooks/install-all.yml --ask-become-pass --ask-vault-pass -e SMF_INSTALLER_ENABLED=true
+# ansible-playbook -i inventory/hosts.yml playbooks/install-all.yml --ask-become-pass -e SMF_INSTALLER_ENABLED=true
+
+- name: Install Docker Engine and the Compose plugin
+  ansible.builtin.import_playbook: install-docker.yml
+
+- name: Build and package the pinned SMF image
+  ansible.builtin.import_playbook: build-smf-image.yml
+
+- name: Deploy and start SMF
+  ansible.builtin.import_playbook: install-smf.yml
