@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-func TestParseLegacyInstallUsesApplyAndNetworkOnlyExposure(t *testing.T) {
+func TestParseLegacyInstallUsesInteractiveInstallFlow(t *testing.T) {
 	Configuration, ConfigurationError := ParseCLIConfiguration([]string{"--install"})
 	if ConfigurationError != nil {
 		t.Fatal(ConfigurationError)
@@ -10,11 +10,24 @@ func TestParseLegacyInstallUsesApplyAndNetworkOnlyExposure(t *testing.T) {
 	if Configuration.Command != CLICommandInstall {
 		t.Fatalf("command = %q, want %q", Configuration.Command, CLICommandInstall)
 	}
-	if !Configuration.ApplyChanges {
-		t.Fatal("legacy --install must apply changes")
+	if Configuration.ApplyChanges {
+		t.Fatal("legacy --install must wait for confirmation unless --apply is set")
 	}
-	if Configuration.ExposureMode != ExposureModeNetworkOnly || !Configuration.ExposureWasSpecified {
-		t.Fatal("legacy --install must use non-interactive network-only exposure")
+	if Configuration.ExposureMode != ExposureModeNetworkOnly || Configuration.ExposureWasSpecified {
+		t.Fatal("legacy --install must preserve the normal interactive exposure flow")
+	}
+}
+
+func TestParseLegacyInstallAppliesWhenRequested(t *testing.T) {
+	Configuration, ConfigurationError := ParseCLIConfiguration([]string{"--install", "--apply", "--non-interactive"})
+	if ConfigurationError != nil {
+		t.Fatal(ConfigurationError)
+	}
+	if !Configuration.ApplyChanges {
+		t.Fatal("--install --apply must enable deployment")
+	}
+	if Configuration.Interactive {
+		t.Fatal("--non-interactive must disable confirmation prompts")
 	}
 }
 

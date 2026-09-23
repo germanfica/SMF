@@ -85,9 +85,9 @@ func ParseCLIConfiguration(Arguments []string) (CLIConfiguration, error) {
 		Configuration.Command = CLICommandVersion
 		return Configuration, nil
 	case "--install":
-		return ParseInstallConfiguration(Arguments[1:], true)
+		return ParseInstallConfiguration(Arguments[1:])
 	case "install":
-		return ParseInstallConfiguration(Arguments[1:], false)
+		return ParseInstallConfiguration(Arguments[1:])
 	case "--list", "list":
 		return ParseListConfiguration(Arguments[1:])
 	default:
@@ -95,10 +95,9 @@ func ParseCLIConfiguration(Arguments []string) (CLIConfiguration, error) {
 	}
 }
 
-func ParseInstallConfiguration(Arguments []string, ApplyByDefault bool) (CLIConfiguration, error) {
+func ParseInstallConfiguration(Arguments []string) (CLIConfiguration, error) {
 	Configuration := NewDefaultCLIConfiguration()
 	Configuration.Command = CLICommandInstall
-	Configuration.ApplyChanges = ApplyByDefault
 
 	Flags := flag.NewFlagSet("smf install", flag.ContinueOnError)
 	Flags.SetOutput(io.Discard)
@@ -107,7 +106,7 @@ func ParseInstallConfiguration(Arguments []string, ApplyByDefault bool) (CLIConf
 	TargetHosts := Flags.String("target", "", "Ansible target hosts expression")
 	PublishedPort := Flags.Int("port", 0, "publish this host TCP port to SMF container port 80")
 	NetworkOnly := Flags.Bool("network-only", false, "keep SMF reachable only on its Docker networks")
-	ApplyChanges := Flags.Bool("apply", ApplyByDefault, "apply the installation plan")
+	ApplyChanges := Flags.Bool("apply", false, "apply the installation plan")
 	NonInteractive := Flags.Bool("non-interactive", false, "do not prompt for exposure or confirmation")
 	DisableInstaller := Flags.Bool("disable-installer", false, "disable SMF's web installer during deployment")
 	AskBecomePassword := Flags.Bool("ask-become-pass", false, "ask Ansible for the sudo password")
@@ -174,11 +173,6 @@ func ParseInstallConfiguration(Arguments []string, ApplyByDefault bool) (CLIConf
 		Configuration.AskVaultPassword = PromptModeDisabled
 	}
 
-	// --install is the documented compatibility shortcut. It must be useful in
-	// scripts, so an omitted exposure means Docker-network-only rather than a prompt.
-	if ApplyByDefault && !Configuration.ExposureWasSpecified {
-		Configuration.ExposureWasSpecified = true
-	}
 	return Configuration, nil
 }
 
@@ -234,7 +228,7 @@ Install options:
   --non-interactive        Do not ask exposure or confirmation questions.
 
 Compatibility:
-  smf --install is equivalent to smf install --apply. With no exposure option,
-  it uses Docker-network-only exposure so it is safe for scripts.
+  smf --install is equivalent to smf install and follows the same interactive
+  plan and confirmation flow. Add --apply for scripted deployment.
 `)
 }
