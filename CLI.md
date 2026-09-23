@@ -48,18 +48,10 @@ In a terminal, this asks how SMF should be exposed and asks for confirmation.
 The default is Docker-network-only exposure, which keeps the service on its
 internal port `80` for a reverse proxy such as Nginx Proxy Manager.
 
-`--install` is a compatibility spelling for the same interactive flow:
+For a scripted default installation:
 
 ```bash
-smf --install
-```
-
-It shows the plan and asks for confirmation just like `smf install`. For a
-scripted Docker-network-only deployment, add `--apply` and
-`--non-interactive`:
-
-```bash
-smf --install --apply --non-interactive
+smf install --non-interactive --apply
 ```
 
 To publish a host port for direct access:

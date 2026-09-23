@@ -84,8 +84,6 @@ func ParseCLIConfiguration(Arguments []string) (CLIConfiguration, error) {
 		Configuration := NewDefaultCLIConfiguration()
 		Configuration.Command = CLICommandVersion
 		return Configuration, nil
-	case "--install":
-		return ParseInstallConfiguration(Arguments[1:])
 	case "install":
 		return ParseInstallConfiguration(Arguments[1:])
 	case "--list", "list":
@@ -200,7 +198,6 @@ func PrintUsage(Writer io.Writer) {
 	fmt.Fprint(Writer, `Usage:
   smf install [options]
   smf list [options]
-  smf --install [options]
   smf --version
   smf --help
 
@@ -212,7 +209,7 @@ Commands:
 Install options:
   --port PORT              Publish PORT on the host as PORT:80.
   --network-only           Keep SMF on Docker networks only (the default).
-  --apply                  Apply a non-interactive installation plan.
+  --apply                  Apply the installation plan without final confirmation.
   --disable-installer      Disable SMF's web installer during this deployment.
   --project-dir PATH       Repository containing the SMF playbooks.
   --inventory PATH         Inventory file, relative to the project by default.
@@ -227,8 +224,5 @@ Install options:
   --no-bootstrap-ansible   Do not install ansible-core if it is unavailable.
   --non-interactive        Do not ask exposure or confirmation questions.
 
-Compatibility:
-  smf --install is equivalent to smf install and follows the same interactive
-  plan and confirmation flow. Add --apply for scripted deployment.
 `)
 }
