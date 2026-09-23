@@ -224,5 +224,8 @@ Install options:
   --no-bootstrap-ansible   Do not install ansible-core if it is unavailable.
   --non-interactive        Do not ask exposure or confirmation questions.
 
+List options:
+  --deployment-dir PATH    Local SMF Compose deployment directory (default /opt/smf).
+
 `)
 }
