@@ -1,14 +1,14 @@
-# SMF CLI and installer
+# SMF CLI and installation script
 
-`installer.sh` and the Go CLI have deliberately separate jobs.
+`install.sh` and the Go CLI have deliberately separate jobs.
 
 | Component | Responsibility |
 | --- | --- |
-| `installer.sh` | Build and install or update the `smf` binary from this checkout. |
+| `install.sh` | Build and install or update the `smf` binary from this checkout. |
 | `smf` | Validate and run an SMF installation through Ansible. |
 | Ansible playbooks | Install Docker, build the pinned image, and deploy Compose resources. |
 
-The shell installer does not deploy a forum. This keeps its bootstrap logic
+The shell script does not deploy a forum. This keeps its bootstrap logic
 small and lets the Go CLI own validation, prompting, and future operational
 commands.
 
@@ -17,28 +17,46 @@ commands.
 Run the script from the root of the SMF checkout:
 
 ```bash
-./installer.sh
+./install.sh
 ```
 
 It builds the checked-out source with Go 1.17 or newer and installs `smf` to
-`~/.local/bin` by default. It does not use `go install` and does not change
-Go's global package state.
+`/usr/local/bin` by default. It uses `sudo` only for the final system-wide
+file copies, so `smf --help` is available immediately on a standard Ubuntu
+shell. It does not use `go install` and does not change Go's global package
+state.
 
-Use another directory only when it is already appropriate for your PATH:
+For a user-only installation that does not request `sudo`, use:
 
 ```bash
-./installer.sh --bin-dir /usr/local/bin
+./install.sh --user
 ```
 
-The script does not elevate privileges itself. Use a writable directory or run
-the command through the privilege mechanism you selected.
+This installs the binary in `~/.local/bin`. If that directory is not already
+in your `PATH`, add this line to `.bashrc` or `.zshrc`, then start a new shell:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+To select another writable directory without an elevation request, use:
+
+```bash
+./install.sh --bin-dir "$HOME/bin"
+```
 
 ## Shell completion
 
-The installer also installs completion scripts for Bash and Zsh. They complete
+The installation script also installs completion scripts for Bash and Zsh. They complete
 the supported command or option for the current position: `smf --` offers only
 global options, while `smf install --` offers only installation options. In
 particular, `--version` is deliberately not suggested after `install`.
+
+The default system-wide installation places them in the standard
+`/usr/local/share` completion directories, so shells with their usual
+completion support enabled discover them without an additional `fpath` entry.
+User and explicit-directory installations place them under `$XDG_DATA_HOME`
+(or `~/.local/share`).
 
 For an immediate Bash activation in the current shell, including completion of
 the checkout command `./smf`, run:
@@ -47,7 +65,7 @@ the checkout command `./smf`, run:
 source "${BASH_COMPLETION_USER_DIR:-$HOME/.local/share/bash-completion}/completions/smf"
 ```
 
-If you are using the checkout before running `installer.sh`, load its bundled
+If you are using the checkout before running `install.sh`, load its bundled
 script directly instead:
 
 ```bash
@@ -70,7 +88,7 @@ autoload -Uz compinit && compinit
 source completions/_smf
 ```
 
-Use `./installer.sh --no-completions` when you do not want the installer to
+Use `./install.sh --no-completions` when you do not want the script to
 copy these scripts.
 
 ## Install SMF

@@ -45,9 +45,15 @@ func TestZshCompletionIsScopedToSMFCommands(t *testing.T) {
 	}
 }
 
-func TestInstallerCopiesBothCompletionScriptsByDefault(t *testing.T) {
-	Contents := readShellCompletionContractFile(t, "installer.sh")
+func TestInstallScriptSelectsTheExpectedInstallationScopes(t *testing.T) {
+	Contents := readShellCompletionContractFile(t, "install.sh")
 	for _, ExpectedFragment := range []string{
+		"InstallationDirectoryPath=\"/usr/local/bin\"",
+		"--user",
+		"--user and --bin-dir cannot be used together",
+		"RunPrivileged install -m 0755",
+		"/usr/local/share/bash-completion/completions/$ProgramName",
+		"/usr/local/share/zsh/site-functions/_$ProgramName",
 		"--no-completions",
 		"completions/$ProgramName.bash",
 		"completions/_$ProgramName",
@@ -55,7 +61,7 @@ func TestInstallerCopiesBothCompletionScriptsByDefault(t *testing.T) {
 		"Installed Zsh completion",
 	} {
 		if !strings.Contains(Contents, ExpectedFragment) {
-			t.Fatalf("installer is missing %q", ExpectedFragment)
+			t.Fatalf("install.sh is missing %q", ExpectedFragment)
 		}
 	}
 }

@@ -1,40 +1,75 @@
 #!/bin/sh
 # Build the checked-out SMF CLI and install it without changing Go's global
-# package state. This installer intentionally does not deploy SMF itself.
+# package state. This script intentionally does not deploy SMF itself.
 set -eu
 
 ProgramName="smf"
 SourceDirectoryPath=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
-InstallationDirectoryPath="${SMF_INSTALL_DIR:-$HOME/.local/bin}"
+InstallationDirectoryPath="/usr/local/bin"
+InstallationScope="system"
 DataDirectoryPath="${XDG_DATA_HOME:-$HOME/.local/share}"
-BashCompletionRootPath="${BASH_COMPLETION_USER_DIR:-$DataDirectoryPath/bash-completion}"
-BashCompletionPath="$BashCompletionRootPath/completions/$ProgramName"
-ZshCompletionPath="$DataDirectoryPath/zsh/site-functions/_$ProgramName"
 InstallCompletions=true
 
 PrintUsage() {
   cat <<'EOF'
-Usage: ./installer.sh [--bin-dir PATH] [--no-completions]
+Usage: ./install.sh [--user] [--bin-dir PATH] [--no-completions]
 
 Builds the smf CLI from this checkout and installs or updates it.
 
 Options:
-  --bin-dir PATH      Install the binary in PATH instead of ~/.local/bin.
+  --user              Install in ~/.local/bin without sudo.
+  --bin-dir PATH      Install in PATH using the current user's permissions.
   --no-completions    Do not install Bash and Zsh completion scripts.
   --help              Show this help.
 
-The script needs Go 1.17 or newer. It does not run the SMF deployment.
+Without an option, the script installs in /usr/local/bin and uses sudo only
+for the final system-wide file copies. It needs Go 1.17 or newer and does not
+run the SMF deployment.
 EOF
+}
+
+PrintError() {
+  printf 'install.sh: %s\n' "$1" >&2
+}
+
+RunPrivileged() {
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+    return
+  fi
+  if ! command -v sudo >/dev/null 2>&1; then
+    PrintError 'sudo is required for the default system-wide installation.'
+    exit 1
+  fi
+  sudo "$@"
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --user)
+      if [ "$InstallationScope" = custom ]; then
+        PrintError '--user and --bin-dir cannot be used together'
+        exit 2
+      fi
+      InstallationDirectoryPath="$HOME/.local/bin"
+      InstallationScope="user"
+      shift
+      ;;
     --bin-dir)
       if [ "$#" -lt 2 ]; then
-        printf '%s\n' 'installer.sh: --bin-dir requires a path' >&2
+        PrintError '--bin-dir requires a path'
+        exit 2
+      fi
+      if [ -z "$2" ]; then
+        PrintError '--bin-dir requires a non-empty path'
+        exit 2
+      fi
+      if [ "$InstallationScope" = user ]; then
+        PrintError '--user and --bin-dir cannot be used together'
         exit 2
       fi
       InstallationDirectoryPath="$2"
+      InstallationScope="custom"
       shift 2
       ;;
     --no-completions)
@@ -46,7 +81,7 @@ while [ "$#" -gt 0 ]; do
       exit 0
       ;;
     *)
-      printf 'installer.sh: unknown option: %s\n' "$1" >&2
+      PrintError "unknown option: $1"
       PrintUsage >&2
       exit 2
       ;;
@@ -54,7 +89,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if ! command -v go >/dev/null 2>&1; then
-  printf '%s\n' 'installer.sh: Go 1.17 or newer is required to build smf.' >&2
+  PrintError 'Go 1.17 or newer is required to build smf.'
   exit 1
 fi
 
@@ -72,27 +107,45 @@ go build \
   -o "$TemporaryDirectoryPath/$ProgramName" \
   "$SourceDirectoryPath"
 
-mkdir -p "$InstallationDirectoryPath"
-install -m 0755 "$TemporaryDirectoryPath/$ProgramName" "$InstallationDirectoryPath/$ProgramName"
+if [ "$InstallationScope" = system ]; then
+  BashCompletionPath="/usr/local/share/bash-completion/completions/$ProgramName"
+  ZshCompletionPath="/usr/local/share/zsh/site-functions/_$ProgramName"
+else
+  BashCompletionRootPath="${BASH_COMPLETION_USER_DIR:-$DataDirectoryPath/bash-completion}"
+  BashCompletionPath="$BashCompletionRootPath/completions/$ProgramName"
+  ZshCompletionPath="$DataDirectoryPath/zsh/site-functions/_$ProgramName"
+fi
 
-if [ "$InstallCompletions" = true ]; then
-  BashCompletionSourcePath="$SourceDirectoryPath/completions/$ProgramName.bash"
-  ZshCompletionSourcePath="$SourceDirectoryPath/completions/_$ProgramName"
-  if [ ! -r "$BashCompletionSourcePath" ] || [ ! -r "$ZshCompletionSourcePath" ]; then
-    printf '%s\n' 'installer.sh: bundled shell completion scripts are missing.' >&2
-    exit 1
+BashCompletionSourcePath="$SourceDirectoryPath/completions/$ProgramName.bash"
+ZshCompletionSourcePath="$SourceDirectoryPath/completions/_$ProgramName"
+if [ "$InstallCompletions" = true ] && { [ ! -r "$BashCompletionSourcePath" ] || [ ! -r "$ZshCompletionSourcePath" ]; }; then
+  PrintError 'bundled shell completion scripts are missing.'
+  exit 1
+fi
+
+if [ "$InstallationScope" = system ]; then
+  RunPrivileged mkdir -p "$InstallationDirectoryPath"
+  RunPrivileged install -m 0755 "$TemporaryDirectoryPath/$ProgramName" "$InstallationDirectoryPath/$ProgramName"
+  if [ "$InstallCompletions" = true ]; then
+    RunPrivileged mkdir -p "$(dirname -- "$BashCompletionPath")" "$(dirname -- "$ZshCompletionPath")"
+    RunPrivileged install -m 0644 "$BashCompletionSourcePath" "$BashCompletionPath"
+    RunPrivileged install -m 0644 "$ZshCompletionSourcePath" "$ZshCompletionPath"
   fi
-
-  mkdir -p "$(dirname -- "$BashCompletionPath")" "$(dirname -- "$ZshCompletionPath")"
-  install -m 0644 "$BashCompletionSourcePath" "$BashCompletionPath"
-  install -m 0644 "$ZshCompletionSourcePath" "$ZshCompletionPath"
+else
+  mkdir -p "$InstallationDirectoryPath"
+  install -m 0755 "$TemporaryDirectoryPath/$ProgramName" "$InstallationDirectoryPath/$ProgramName"
+  if [ "$InstallCompletions" = true ]; then
+    mkdir -p "$(dirname -- "$BashCompletionPath")" "$(dirname -- "$ZshCompletionPath")"
+    install -m 0644 "$BashCompletionSourcePath" "$BashCompletionPath"
+    install -m 0644 "$ZshCompletionSourcePath" "$ZshCompletionPath"
+  fi
 fi
 
 printf 'Installed %s (%s) in %s\n' "$ProgramName" "$BuildVersion" "$InstallationDirectoryPath"
 if [ "$InstallCompletions" = true ]; then
   printf 'Installed Bash completion in %s\n' "$BashCompletionPath"
   printf 'Installed Zsh completion in %s\n' "$ZshCompletionPath"
-  printf '%s\n' 'Start a new Bash shell, or follow the Bash and Zsh activation commands in CLI.md.'
+  printf '%s\n' 'Open a new Bash or Zsh session to load shell completion.'
 fi
 case ":${PATH}:" in
   *":${InstallationDirectoryPath}:"*) ;;

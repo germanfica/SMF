@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-// Version is set by installer.sh for source builds and may be overridden with
+// Version is set by install.sh for source builds and may be overridden with
 // go build -ldflags during release builds.
 var Version = "development"
 
