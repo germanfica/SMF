@@ -31,10 +31,26 @@ function smfFileAuditExcerpt($buffer, $matchOffset, $matchLength)
 	return $excerpt;
 }
 
-function smfFileAuditRedactPHPAssignments($excerpt)
+function smfFileAuditRedactSensitiveValues($excerpt)
 {
+	$sensitiveName = '(?:webmaster_email|[A-Za-z_][A-Za-z0-9_-]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?key|webhook)[A-Za-z0-9_-]*)';
+	$excerpt = preg_replace_callback(
+		'#(\$' . $sensitiveName . '\s*=\s*)([\'\"])(?:\\\\.|(?!\2).)*\2#is',
+		function ($match) {
+			return $match[1] . $match[2] . '****' . $match[2];
+		},
+		$excerpt
+	);
+	$excerpt = preg_replace_callback(
+		'#(^[ \t]*(?:export[ \t]+)?' . $sensitiveName . '[ \t]*=[ \t]*)([\'\"]?)[^\r\n]*\2#im',
+		function ($match) {
+			return $match[1] . ($match[2] === '' ? '' : $match[2]) . '****' . ($match[2] === '' ? '' : $match[2]);
+		},
+		$excerpt
+	);
+
 	return preg_replace_callback(
-		'#(\$(?:webmaster_email|auth_secret)\s*=\s*)([\'\"]).*?\2#s',
+		'#((?:[\'\"]?' . $sensitiveName . '[\'\"]?)[ \t]*:[ \t]*)([\'\"])(?:\\\\.|(?!\2).)*\2#is',
 		function ($match) {
 			return $match[1] . $match[2] . '****' . $match[2];
 		},
@@ -50,7 +66,7 @@ function smfFileAuditPrintMatch($path, $byteOffset, $excerpt)
 	fwrite(
 		STDOUT,
 		$path . "\t" . $byteOffset . "\t" .
-		json_encode(smfFileAuditRedactPHPAssignments($excerpt), JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) . "\n"
+		json_encode(smfFileAuditRedactSensitiveValues($excerpt), JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) . "\n"
 	);
 }
 
