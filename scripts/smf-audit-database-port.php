@@ -59,6 +59,51 @@ function smfDatabaseAuditExcerpt($value, $port)
 	return $excerpt;
 }
 
+function smfDatabaseAuditRedactSensitiveValues($excerpt)
+{
+	$sensitiveName = '(?:webmaster_email|[A-Za-z_][A-Za-z0-9_-]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?key|webhook)[A-Za-z0-9_-]*)';
+	$excerpt = preg_replace_callback(
+		'#(\$' . $sensitiveName . '\s*=\s*)([\'\"])(?:\\\\.|(?!\2).)*\2#is',
+		function ($match) {
+			return $match[1] . $match[2] . '****' . $match[2];
+		},
+		$excerpt
+	);
+	$excerpt = preg_replace_callback(
+		'#(^[ \t]*(?:export[ \t]+)?' . $sensitiveName . '[ \t]*=[ \t]*)([\'\"]?)[^\r\n]*\2#im',
+		function ($match) {
+			return $match[1] . ($match[2] === '' ? '' : $match[2]) . '****' . ($match[2] === '' ? '' : $match[2]);
+		},
+		$excerpt
+	);
+	$excerpt = preg_replace_callback(
+		'#((?:[\'\"]?' . $sensitiveName . '[\'\"]?)[ \t]*:[ \t]*)([\'\"])(?:\\\\.|(?!\2).)*\2#is',
+		function ($match) {
+			return $match[1] . $match[2] . '****' . $match[2];
+		},
+		$excerpt
+	);
+
+	return preg_replace_callback(
+		'#(s:\d+:"' . $sensitiveName . '";s:\d+:")[^"]*(")#i',
+		function ($match) {
+			return $match[1] . '****' . $match[2];
+		},
+		$excerpt
+	);
+}
+
+function smfDatabaseAuditRedactRowIdentity($rowIdentity)
+{
+	foreach ($rowIdentity as $name => $value) {
+		if (preg_match('/(?:session|password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?key|webhook)/i', $name)) {
+			$rowIdentity[$name] = '****';
+		}
+	}
+
+	return $rowIdentity;
+}
+
 function smfDatabaseAuditPrimaryKeyColumns($tableName)
 {
 	global $smcFunc;
@@ -103,9 +148,9 @@ function smfDatabaseAuditPrintMatch($tableName, $rowIdentity, $columnName, $exce
 	fwrite(
 		STDOUT,
 		$tableName . "\t" .
-		json_encode($rowIdentity, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) . "\t" .
+		json_encode(smfDatabaseAuditRedactRowIdentity($rowIdentity), JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) . "\t" .
 		$columnName . "\t" .
-		json_encode($excerpt, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) . "\n"
+		json_encode(smfDatabaseAuditRedactSensitiveValues($excerpt), JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) . "\n"
 	);
 }
 
