@@ -1,4 +1,4 @@
-// smf installs and inspects an SMF deployment managed by this repository.
+// smf installs, configures, and inspects an SMF deployment managed by this repository.
 package main
 
 import (

@@ -52,7 +52,25 @@ func PromptForExposure(Configuration CLIConfiguration, Reader *bufio.Reader) (CL
 	return Configuration, nil
 }
 
-func PromptForInstallationConfirmation(Reader *bufio.Reader) (bool, error) {
+func PromptForForumURL(Configuration CLIConfiguration, Reader *bufio.Reader) (CLIConfiguration, error) {
+	for {
+		fmt.Fprint(os.Stdout, "Forum URL (without a trailing slash): ")
+		ForumURL, ForumURLError := ReadTerminalLine(Reader)
+		if ForumURLError != nil {
+			return CLIConfiguration{}, ForumURLError
+		}
+		ValidatedForumURL, ValidationError := ValidateForumURL(ForumURL)
+		if ValidationError != nil {
+			fmt.Fprintln(os.Stdout, "Enter an http or https URL with a host and no trailing slash.")
+			continue
+		}
+		Configuration.ForumURL = ValidatedForumURL
+		Configuration.ForumURLWasSpecified = true
+		return Configuration, nil
+	}
+}
+
+func PromptForPlanConfirmation(Reader *bufio.Reader) (bool, error) {
 	fmt.Fprint(os.Stdout, "\nApply this plan now? [y/N]: ")
 	Confirmation, ConfirmationError := ReadTerminalLine(Reader)
 	if ConfirmationError != nil {

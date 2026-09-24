@@ -19,7 +19,9 @@ func TestBashCompletionRegistersInstalledAndCheckoutCommands(t *testing.T) {
 	Contents := readShellCompletionContractFile(t, "completions/smf.bash")
 	for _, ExpectedFragment := range []string{
 		"complete -F _smf_complete smf ./smf",
-		"install list --help --version",
+		"install configure list --help --version",
+		"--forum-url",
+		"install|configure",
 		"--no-bootstrap-ansible",
 		"--deployment-dir",
 		"_smf_option_was_provided --port",
@@ -35,6 +37,8 @@ func TestZshCompletionIsScopedToSMFCommands(t *testing.T) {
 	for _, ExpectedFragment := range []string{
 		"#compdef smf ./smf",
 		"compdef _smf smf ./smf",
+		"configure[Change deployed SMF exposure and forum URL]",
+		"--forum-url=",
 		"(--network-only)--port=",
 		"(--port)--network-only",
 		"--deployment-dir=",

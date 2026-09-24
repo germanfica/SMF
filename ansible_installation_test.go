@@ -44,6 +44,38 @@ func TestBuildAnsiblePlaybookOperationPassesStructuredExtraVariables(t *testing.
 	}
 }
 
+func TestBuildConfigureAnsiblePlaybookOperationPassesForumURL(t *testing.T) {
+	Configuration := NewDefaultCLIConfiguration()
+	Configuration.ExposureMode = ExposureModePublishedPort
+	Configuration.PublishedPort = 8093
+	Configuration.ForumURL = "http://localhost:8093"
+	Configuration.AskBecomePassword = PromptModeDisabled
+	Project := SMFProject{
+		RootPath:              "/workspace/smf",
+		InventoryPath:         "/workspace/smf/inventory/hosts.yml",
+		ConfigurePlaybookPath: "/workspace/smf/playbooks/configure-smf.yml",
+	}
+	Resolution := AnsibleResolution{AnsiblePlaybookPath: "/workspace/bin/ansible-playbook"}
+	Operation, OperationError := BuildConfigureAnsiblePlaybookOperation(Configuration, Project, Resolution, false)
+	if OperationError != nil {
+		t.Fatal(OperationError)
+	}
+	ExtraVariablesJSON := FindArgumentAfter(t, Operation.Arguments, "--extra-vars")
+	ExtraVariables := make(map[string]interface{})
+	if JSONError := json.Unmarshal([]byte(ExtraVariablesJSON), &ExtraVariables); JSONError != nil {
+		t.Fatal(JSONError)
+	}
+	if ExtraVariables["SMF_PUBLISHED_PORT"] != "8093" {
+		t.Fatalf("SMF_PUBLISHED_PORT = %#v, want 8093", ExtraVariables["SMF_PUBLISHED_PORT"])
+	}
+	if ExtraVariables["SMF_FORUM_URL"] != "http://localhost:8093" {
+		t.Fatalf("SMF_FORUM_URL = %#v", ExtraVariables["SMF_FORUM_URL"])
+	}
+	if Operation.Arguments[len(Operation.Arguments)-1] != filepath.Clean(Project.ConfigurePlaybookPath) {
+		t.Fatalf("playbook = %q, want %q", Operation.Arguments[len(Operation.Arguments)-1], Project.ConfigurePlaybookPath)
+	}
+}
+
 func FindArgumentAfter(t *testing.T, Arguments []string, Flag string) string {
 	t.Helper()
 	for ArgumentIndex, Argument := range Arguments {

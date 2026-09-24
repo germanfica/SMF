@@ -11,6 +11,7 @@ _smf() {
   if (( CURRENT == 2 )); then
     _values 'smf command or option' \
       'install[Plan and install SMF through Ansible]' \
+      'configure[Change deployed SMF exposure and forum URL]' \
       'list[Show the local SMF Compose service state]' \
       '--help[Show usage]' \
       '--version[Show the smf version]'
@@ -36,6 +37,26 @@ _smf() {
         '--ansible-runtime=[Store the managed private Ansible environment here]:directory:_directories' \
         '--no-bootstrap-ansible[Do not install ansible-core if it is unavailable]' \
         '--non-interactive[Do not ask exposure or confirmation questions]' \
+        '--help[Show usage]'
+      ;;
+    configure)
+      _arguments \
+        '(--network-only)--port=[Publish PORT on the host as PORT:80]:host port:' \
+        '(--port)--network-only[Keep SMF on Docker networks only]' \
+        '--forum-url=[Public forum URL without a trailing slash]:forum URL:' \
+        '--apply[Apply the configuration plan without final confirmation]' \
+        '--project-dir=[Repository containing the SMF playbooks]:directory:_directories' \
+        '--inventory=[Inventory file, relative to the project by default]:inventory file:_files' \
+        '--target=[Override TARGET_HOSTS for the playbooks]:hosts expression:' \
+        '(--no-ask-become-pass)--ask-become-pass[Always ask Ansible for the sudo password]' \
+        '(--ask-become-pass)--no-ask-become-pass[Never ask Ansible for the sudo password]' \
+        '(--no-ask-vault-pass --vault-password-file)--ask-vault-pass[Always ask for an Ansible Vault password]' \
+        '(--ask-vault-pass)--no-ask-vault-pass[Never ask for an Ansible Vault password]' \
+        '(--ask-vault-pass)--vault-password-file=[Use an Ansible Vault password file]:password file:_files' \
+        '--ansible-playbook=[Use this ansible-playbook executable]:executable:_command_names -e' \
+        '--ansible-runtime=[Store the managed private Ansible environment here]:directory:_directories' \
+        '--no-bootstrap-ansible[Do not install ansible-core if it is unavailable]' \
+        '--non-interactive[Do not ask settings or confirmation questions]' \
         '--help[Show usage]'
       ;;
     list)

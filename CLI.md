@@ -5,7 +5,7 @@
 | Component | Responsibility |
 | --- | --- |
 | `install.sh` | Build and install or update the `smf` binary from this checkout. |
-| `smf` | Validate and run an SMF installation through Ansible. |
+| `smf` | Install, reconfigure, and inspect SMF through Ansible. |
 | Ansible playbooks | Install Docker, build the pinned image, and deploy Compose resources. |
 
 The shell script does not deploy a forum. This keeps its bootstrap logic
@@ -49,8 +49,9 @@ To select another writable directory without an elevation request, use:
 
 The installation script also installs completion scripts for Bash and Zsh. They complete
 the supported command or option for the current position: `smf --` offers only
-global options, while `smf install --` offers only installation options. In
-particular, `--version` is deliberately not suggested after `install`.
+global options, while `smf install --` and `smf configure --` offer only
+options valid for their respective command. In particular, `--version` is
+deliberately not suggested after an operation command.
 
 The default system-wide installation places them in the standard
 `/usr/local/share` completion directories, so shells with their usual
@@ -58,11 +59,17 @@ completion support enabled discover them without an additional `fpath` entry.
 User and explicit-directory installations place them under `$XDG_DATA_HOME`
 (or `~/.local/share`).
 
-For an immediate Bash activation in the current shell, including completion of
-the checkout command `./smf`, run:
+For an immediate Bash activation after a user or explicit-directory
+installation, including completion of the checkout command `./smf`, run:
 
 ```bash
 source "${BASH_COMPLETION_USER_DIR:-$HOME/.local/share/bash-completion}/completions/smf"
+```
+
+After the default system-wide installation, use its system completion path:
+
+```bash
+source /usr/local/share/bash-completion/completions/smf
 ```
 
 If you are using the checkout before running `install.sh`, load its bundled
@@ -135,6 +142,56 @@ publication instead of retaining it. The deployment requires Docker Compose
 2.24.4 or newer and verifies the resulting host-port state after it starts
 SMF. A published port is bound on all host interfaces, so place it behind the
 intended firewall or reverse proxy policy.
+
+## Reconfigure an existing deployment
+
+Use `configure` after the forum has been installed to change its Docker
+exposure and its public URL. It does not run `install.php`, does not populate
+the database, and does not create an administrator account again.
+
+```bash
+smf configure
+```
+
+In a terminal, the command asks how SMF should be exposed, asks for the forum
+URL, prints the plan, and asks for confirmation. The forum URL must start with
+`http://` or `https://` and must not have a trailing slash.
+
+For direct access on a new port:
+
+```bash
+smf configure --port 8093 --forum-url http://localhost:8093
+```
+
+For a reverse proxy that reaches SMF through its Docker network only:
+
+```bash
+smf configure --network-only --forum-url https://forum.example.com
+```
+
+`--port` and `--network-only` are mutually exclusive. They are both explicit
+in non-interactive mode, as is the public URL:
+
+```bash
+smf configure --port 8093 \
+  --forum-url http://localhost:8093 \
+  --non-interactive --apply
+```
+
+The command obtains the active SMF image from the resolved Compose
+configuration, rewrites only the managed SMF override, recreates only the
+`smf` service, and updates `$boardurl` in the persisted `Settings.php` target
+in the `smf-config` volume. It also updates existing URL configuration records
+for local avatars, custom avatars, smileys, and global theme and image paths.
+Only values derived from the previous forum URL are rewritten; an external CDN
+URL is preserved. If an earlier incomplete port-only reconfiguration already
+changed `$boardurl`, the command can also repair standard local SMF asset paths
+on the same scheme and host.
+
+It verifies the selected host-port state and every updated URL value before
+reporting success. It does not run `install.php`, create, drop, or populate
+tables, recreate the administrator account, change posts or users, or recreate
+the database service. It updates existing configuration records only.
 
 ## Ansible bootstrap
 

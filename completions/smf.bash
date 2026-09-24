@@ -49,8 +49,9 @@ _smf_complete_ansible_playbook() {
   done < <(compgen -c -- "$CurrentWord")
 }
 
-_smf_complete_install_options() {
+_smf_complete_operation_options() {
   local CurrentWord="$1"
+  local CommandName="$2"
   local Candidate
   local -a AllOptions Candidates
 
@@ -58,7 +59,6 @@ _smf_complete_install_options() {
     --port
     --network-only
     --apply
-    --disable-installer
     --project-dir
     --inventory
     --target
@@ -73,6 +73,13 @@ _smf_complete_install_options() {
     --non-interactive
     --help
   )
+
+  if [[ "$CommandName" == "install" ]]; then
+    AllOptions+=(--disable-installer)
+  fi
+  if [[ "$CommandName" == "configure" ]]; then
+    AllOptions+=(--forum-url)
+  fi
 
   Candidates=()
   for Candidate in "${AllOptions[@]}"; do
@@ -122,15 +129,15 @@ _smf_complete() {
   [[ "$CurrentWord" == "-" ]] && return 0
 
   if (( COMP_CWORD == 1 )); then
-    COMPREPLY=( $(compgen -W 'install list --help --version' -- "$CurrentWord") )
+    COMPREPLY=( $(compgen -W 'install configure list --help --version' -- "$CurrentWord") )
     return 0
   fi
 
   CommandName="${COMP_WORDS[1]}"
   case "$CommandName" in
-    install)
+    install|configure)
       case "$PreviousWord" in
-        --port|--target)
+        --port|--target|--forum-url)
           return 0
           ;;
         --project-dir|--ansible-runtime)
@@ -146,7 +153,7 @@ _smf_complete() {
           return 0
           ;;
       esac
-      _smf_complete_install_options "$CurrentWord"
+      _smf_complete_operation_options "$CurrentWord" "$CommandName"
       ;;
     list)
       case "$PreviousWord" in
@@ -161,5 +168,5 @@ _smf_complete() {
 }
 
 # Register both the installed command and the checkout invocation used during
-# development. A sourced file can therefore complete `./smf install --` too.
+# development. A sourced file can therefore complete `./smf configure --` too.
 complete -F _smf_complete smf ./smf

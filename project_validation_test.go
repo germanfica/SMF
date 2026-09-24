@@ -13,6 +13,8 @@ func TestResolveSMFProjectFindsParentCheckout(t *testing.T) {
 		"playbooks/install-docker.yml",
 		"playbooks/build-smf-image.yml",
 		"playbooks/install-smf.yml",
+		"playbooks/configure-smf.yml",
+		"scripts/configure-smf-url-settings.php",
 		"inventory/hosts.yml",
 	}
 	for _, RequiredRelativePath := range RequiredRelativePaths {

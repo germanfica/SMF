@@ -8,10 +8,11 @@ import (
 )
 
 type SMFProject struct {
-	RootPath            string
-	InventoryPath       string
-	InstallPlaybookPath string
-	VaultFilePath       string
+	RootPath              string
+	InventoryPath         string
+	InstallPlaybookPath   string
+	ConfigurePlaybookPath string
+	VaultFilePath         string
 }
 
 func ResolveSMFProject(Configuration CLIConfiguration) (SMFProject, error) {
@@ -24,6 +25,8 @@ func ResolveSMFProject(Configuration CLIConfiguration) (SMFProject, error) {
 		"playbooks/install-docker.yml",
 		"playbooks/build-smf-image.yml",
 		"playbooks/install-smf.yml",
+		"playbooks/configure-smf.yml",
+		"scripts/configure-smf-url-settings.php",
 		"inventory/hosts.yml",
 	}
 	for _, RequiredRelativePath := range RequiredRelativePaths {
@@ -37,10 +40,11 @@ func ResolveSMFProject(Configuration CLIConfiguration) (SMFProject, error) {
 		return SMFProject{}, InventoryPathError
 	}
 	return SMFProject{
-		RootPath:            ProjectRootPath,
-		InventoryPath:       InventoryPath,
-		InstallPlaybookPath: filepath.Join(ProjectRootPath, "playbooks", "install-all.yml"),
-		VaultFilePath:       filepath.Join(ProjectRootPath, "inventory", "group_vars", "smf", "vault.yml"),
+		RootPath:              ProjectRootPath,
+		InventoryPath:         InventoryPath,
+		InstallPlaybookPath:   filepath.Join(ProjectRootPath, "playbooks", "install-all.yml"),
+		ConfigurePlaybookPath: filepath.Join(ProjectRootPath, "playbooks", "configure-smf.yml"),
+		VaultFilePath:         filepath.Join(ProjectRootPath, "inventory", "group_vars", "smf", "vault.yml"),
 	}, nil
 }
 

@@ -156,6 +156,37 @@ func BuildAnsiblePlaybookOperation(Configuration CLIConfiguration, Project SMFPr
 	if Configuration.ExposureMode == ExposureModePublishedPort {
 		ExtraVariables["SMF_PUBLISHED_PORT"] = fmt.Sprintf("%d", Configuration.PublishedPort)
 	}
+	return BuildSMFAnsiblePlaybookOperation(
+		Configuration,
+		Project,
+		Resolution,
+		AskVaultPassword,
+		ExtraVariables,
+		Project.InstallPlaybookPath,
+		"Install SMF through Ansible",
+	)
+}
+
+func BuildConfigureAnsiblePlaybookOperation(Configuration CLIConfiguration, Project SMFProject, Resolution AnsibleResolution, AskVaultPassword bool) (CommandOperation, error) {
+	ExtraVariables := map[string]interface{}{
+		"SMF_PUBLISHED_PORT": "",
+		"SMF_FORUM_URL":      Configuration.ForumURL,
+	}
+	if Configuration.ExposureMode == ExposureModePublishedPort {
+		ExtraVariables["SMF_PUBLISHED_PORT"] = fmt.Sprintf("%d", Configuration.PublishedPort)
+	}
+	return BuildSMFAnsiblePlaybookOperation(
+		Configuration,
+		Project,
+		Resolution,
+		AskVaultPassword,
+		ExtraVariables,
+		Project.ConfigurePlaybookPath,
+		"Configure deployed SMF through Ansible",
+	)
+}
+
+func BuildSMFAnsiblePlaybookOperation(Configuration CLIConfiguration, Project SMFProject, Resolution AnsibleResolution, AskVaultPassword bool, ExtraVariables map[string]interface{}, PlaybookPath string, OperationName string) (CommandOperation, error) {
 	if Configuration.TargetHosts != "" {
 		ExtraVariables["TARGET_HOSTS"] = Configuration.TargetHosts
 	}
@@ -176,9 +207,9 @@ func BuildAnsiblePlaybookOperation(Configuration CLIConfiguration, Project SMFPr
 	} else if AskVaultPassword {
 		Arguments = append(Arguments, "--ask-vault-pass")
 	}
-	Arguments = append(Arguments, "--extra-vars", string(ExtraVariablesJSON), Project.InstallPlaybookPath)
+	Arguments = append(Arguments, "--extra-vars", string(ExtraVariablesJSON), PlaybookPath)
 	return CommandOperation{
-		Name:             "Install SMF through Ansible",
+		Name:             OperationName,
 		ExecutablePath:   Resolution.AnsiblePlaybookPath,
 		Arguments:        Arguments,
 		WorkingDirectory: Project.RootPath,
