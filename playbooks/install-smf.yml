@@ -1,0 +1,311 @@
+# Deploy an archive already created by build-smf-image.yml.
+# ansible-playbook -i inventory.yml playbooks/install-smf.yml --ask-become-pass --ask-vault-pass -e SMF_INSTALLER_ENABLED=true
+# ansible-playbook -i inventory/hosts.yml playbooks/install-smf.yml --ask-become-pass -e SMF_INSTALLER_ENABLED=true
+- name: Deploy SMF with Docker Compose
+  hosts: "{{ TARGET_HOSTS | default('smf') }}"
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/smf-build.yml"
+
+  vars:
+    APP_NAME: smf
+    APP_USER: "{{ APP_NAME }}"
+    APP_GROUP: "{{ APP_NAME }}"
+    SMF_BASE_PATH: "/opt/{{ APP_NAME }}"
+    SMF_SECRETS_PATH: "{{ SMF_BASE_PATH }}/secrets"
+    SMF_DB_NAME: smf
+    SMF_DB_USER: smf
+    SMF_INSTALLER_ENABLED: false
+    SMF_COMPOSE_TEMPLATE_SRC: "{{ playbook_dir }}/../templates/docker-compose.smf.yml.j2"
+
+  pre_tasks:
+    - name: Validate required deployment variables
+      ansible.builtin.assert:
+        that:
+          - SMF_IMAGE_NAME is defined
+          - SMF_IMAGE_NAME | length > 0
+          - SMF_IMAGE_TAG is defined
+          - SMF_IMAGE_TAG | length > 0
+          - SMF_IMAGE_TAR is defined
+          - SMF_IMAGE_TAR | length > 0
+          - SMF_IMAGE_TAR_SHA256 is defined
+          - SMF_IMAGE_TAR_SHA256 | length > 0
+          - SMF_DB_PASSWORD is defined
+          - SMF_DB_PASSWORD | length >= 24
+          - SMF_MYSQL_ROOT_PASSWORD is defined
+          - SMF_MYSQL_ROOT_PASSWORD | length >= 24
+        fail_msg: >-
+          Define SMF_IMAGE_NAME, SMF_IMAGE_TAG, SMF_IMAGE_TAR and
+          SMF_IMAGE_TAR_SHA256 in Jenkins,
+          and keep SMF_DB_PASSWORD and SMF_MYSQL_ROOT_PASSWORD encrypted with Ansible Vault.
+      no_log: true
+
+    - name: Verify Docker Engine availability
+      ansible.builtin.command:
+        argv:
+          - docker
+          - version
+      changed_when: false
+
+    - name: Verify Docker Compose plugin availability
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - version
+          - --short
+      changed_when: false
+
+    - name: Verify image archive on the Ansible control node
+      ansible.builtin.stat:
+        path: "{{ SMF_IMAGE_TAR }}"
+      delegate_to: localhost
+      become: false
+      register: smf_image_tar_stat
+
+    - name: Fail when the image archive is absent
+      ansible.builtin.assert:
+        that:
+          - smf_image_tar_stat.stat.exists
+          - smf_image_tar_stat.stat.isreg
+        fail_msg: "SMF_IMAGE_TAR does not point to a Docker image archive on the Ansible control node."
+
+    - name: Verify image archive checksum manifest on the Ansible control node
+      ansible.builtin.stat:
+        path: "{{ SMF_IMAGE_TAR_SHA256 }}"
+      delegate_to: localhost
+      become: false
+      register: smf_image_tar_sha256_stat
+
+    - name: Fail when the image archive checksum manifest is absent
+      ansible.builtin.assert:
+        that:
+          - smf_image_tar_sha256_stat.stat.exists
+          - smf_image_tar_sha256_stat.stat.isreg
+        fail_msg: "SMF_IMAGE_TAR_SHA256 does not point to a checksum manifest on the Ansible control node."
+
+    - name: Verify SMF image archive checksum on the Ansible control node
+      ansible.builtin.command:
+        argv:
+          - sha256sum
+          - --check
+          - "{{ SMF_IMAGE_TAR_SHA256 }}"
+        chdir: "{{ SMF_IMAGE_TAR | dirname }}"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+  tasks:
+    - name: Create the SMF application group
+      ansible.builtin.group:
+        name: "{{ APP_GROUP }}"
+        system: true
+
+    - name: Create the SMF application user
+      ansible.builtin.user:
+        name: "{{ APP_USER }}"
+        group: "{{ APP_GROUP }}"
+        system: true
+        create_home: false
+        shell: /bin/false
+
+    - name: Create SMF deployment directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ APP_USER }}"
+        group: "{{ APP_GROUP }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - path: "{{ SMF_BASE_PATH }}"
+          mode: "0750"
+        - path: "{{ SMF_SECRETS_PATH }}"
+          mode: "0700"
+
+    - name: Write MySQL secrets
+      ansible.builtin.copy:
+        content: "{{ item.value }}\n"
+        dest: "{{ SMF_SECRETS_PATH }}/{{ item.name }}"
+        owner: "{{ APP_USER }}"
+        group: "{{ APP_GROUP }}"
+        mode: "0600"
+      loop:
+        - name: mysql_password
+          value: "{{ SMF_DB_PASSWORD }}"
+        - name: mysql_root_password
+          value: "{{ SMF_MYSQL_ROOT_PASSWORD }}"
+      no_log: true
+
+    - name: Ensure the proxy Docker network exists
+      block:
+        - name: Inspect proxy Docker network
+          ansible.builtin.command:
+            argv:
+              - docker
+              - network
+              - inspect
+              - "{{ SMF_PROXY_NETWORK }}"
+          register: smf_proxy_network_inspection
+          changed_when: false
+          failed_when: false
+
+        - name: Create proxy Docker network
+          ansible.builtin.command:
+            argv:
+              - docker
+              - network
+              - create
+              - "{{ SMF_PROXY_NETWORK }}"
+          when: smf_proxy_network_inspection.rc != 0
+
+    - name: Create temporary directory for the SMF image archive
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: smf-image-
+      register: smf_remote_image_directory
+
+    - name: Transfer and load SMF image
+      block:
+        - name: Copy SMF image archive to the managed host
+          ansible.builtin.copy:
+            src: "{{ SMF_IMAGE_TAR }}"
+            dest: "{{ smf_remote_image_directory.path }}/smf-image.tar"
+            owner: root
+            group: root
+            mode: "0600"
+
+        - name: Load SMF image archive
+          ansible.builtin.command:
+            argv:
+              - docker
+              - load
+              - --input
+              - "{{ smf_remote_image_directory.path }}/smf-image.tar"
+
+        - name: Verify expected SMF image is loaded
+          ansible.builtin.command:
+            argv:
+              - docker
+              - image
+              - inspect
+              - "{{ SMF_IMAGE_NAME }}:{{ SMF_IMAGE_TAG }}"
+          changed_when: false
+      always:
+        - name: Remove temporary SMF image archive
+          ansible.builtin.file:
+            path: "{{ smf_remote_image_directory.path }}"
+            state: absent
+
+    - name: Pull the pinned MySQL image
+      ansible.builtin.command:
+        argv:
+          - docker
+          - pull
+          - "{{ SMF_MYSQL_IMAGE }}"
+      register: smf_mysql_pull
+      changed_when: "'Downloaded newer image' in smf_mysql_pull.stdout"
+
+    - name: Render SMF Docker Compose configuration
+      ansible.builtin.template:
+        src: "{{ SMF_COMPOSE_TEMPLATE_SRC }}"
+        dest: "{{ SMF_BASE_PATH }}/docker-compose.yml"
+        owner: "{{ APP_USER }}"
+        group: "{{ APP_GROUP }}"
+        mode: "0600"
+
+    - name: Validate rendered SMF Docker Compose configuration
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - config
+          - --quiet
+        chdir: "{{ SMF_BASE_PATH }}"
+      changed_when: false
+
+    - name: Create SMF Docker resources without starting services
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - create
+        chdir: "{{ SMF_BASE_PATH }}"
+      changed_when: true
+
+    - name: Enable the SMF installer until initial setup is complete
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - run
+          - --rm
+          - --no-deps
+          - --entrypoint
+          - /bin/sh
+          - smf
+          - -ec
+          - "touch /var/www/smf-config/installer-enabled && chmod 0600 /var/www/smf-config/installer-enabled"
+        chdir: "{{ SMF_BASE_PATH }}"
+      when: SMF_INSTALLER_ENABLED | bool
+      changed_when: true
+
+    - name: Disable the SMF installer after initial setup
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - run
+          - --rm
+          - --no-deps
+          - --entrypoint
+          - /bin/sh
+          - smf
+          - -ec
+          - "rm -f /var/www/smf-config/installer-enabled"
+        chdir: "{{ SMF_BASE_PATH }}"
+      when: not (SMF_INSTALLER_ENABLED | bool)
+      changed_when: true
+
+    - name: Start or update the MySQL service
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - up
+          - --detach
+          - --pull
+          - never
+          - --wait
+          - --wait-timeout
+          - "180"
+          - database
+        chdir: "{{ SMF_BASE_PATH }}"
+      changed_when: true
+
+    - name: Start or update the SMF service
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - up
+          - --detach
+          - --pull
+          - never
+          - --force-recreate
+          - --wait
+          - --wait-timeout
+          - "180"
+          - smf
+        chdir: "{{ SMF_BASE_PATH }}"
+      changed_when: true
+
+    - name: Show deployed SMF service state
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - ps
+        chdir: "{{ SMF_BASE_PATH }}"
+      changed_when: false
