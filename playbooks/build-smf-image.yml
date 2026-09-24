@@ -8,6 +8,11 @@
   vars_files:
     - "{{ playbook_dir }}/../vars/smf-build.yml"
 
+  vars:
+    # The CLI enables this for a clean host. Docker's group membership does
+    # not take effect in the Ansible process that just created the group.
+    SMF_DOCKER_COMMAND_BECOME: false
+
   pre_tasks:
     - name: Validate fixed SMF build inputs
       ansible.builtin.assert:
@@ -32,6 +37,25 @@
         argv:
           - docker
           - version
+      become: "{{ SMF_DOCKER_COMMAND_BECOME | bool }}"
+      changed_when: false
+
+    - name: Record the invoking user UID
+      ansible.builtin.command:
+        argv:
+          - id
+          - -u
+      register: smf_build_user_uid
+      become: false
+      changed_when: false
+
+    - name: Record the invoking user GID
+      ansible.builtin.command:
+        argv:
+          - id
+          - -g
+      register: smf_build_user_gid
+      become: false
       changed_when: false
 
     - name: Verify required SMF build inputs
@@ -70,6 +94,7 @@
           - --tag
           - "{{ SMF_IMAGE_NAME }}:{{ SMF_IMAGE_TAG }}"
           - "{{ SMF_PROJECT_PATH }}"
+      become: "{{ SMF_DOCKER_COMMAND_BECOME | bool }}"
       changed_when: true
 
     - name: Verify the built SMF image
@@ -92,6 +117,7 @@
             test -L /var/www/html/Settings.php
             grep -F "SMF_VERSION" /var/www/html/install.php
             grep -F "{{ SMF_VERSION }}" /var/www/html/install.php
+      become: "{{ SMF_DOCKER_COMMAND_BECOME | bool }}"
       changed_when: false
 
     - name: Create the SMF artifact directory
@@ -127,13 +153,20 @@
               - --output
               - "{{ smf_temporary_image_tar.path }}"
               - "{{ SMF_IMAGE_NAME }}:{{ SMF_IMAGE_TAG }}"
+          become: "{{ SMF_DOCKER_COMMAND_BECOME | bool }}"
           changed_when: true
 
-        - name: Calculate the SMF image archive checksum
+        - name: Restore build-user access to the temporary SMF image archive
+          ansible.builtin.file:
+            path: "{{ smf_temporary_image_tar.path }}"
+            owner: "{{ smf_build_user_uid.stdout }}"
+            group: "{{ smf_build_user_gid.stdout }}"
+            mode: "0600"
+          become: "{{ SMF_DOCKER_COMMAND_BECOME | bool }}"
+
+        - name: Inspect the temporary SMF image archive
           ansible.builtin.stat:
             path: "{{ smf_temporary_image_tar.path }}"
-            get_checksum: true
-            checksum_algorithm: sha256
           register: smf_temporary_image_tar_stat
 
         - name: Verify the temporary SMF image archive
@@ -142,12 +175,26 @@
               - smf_temporary_image_tar_stat.stat.exists
               - smf_temporary_image_tar_stat.stat.isreg
               - smf_temporary_image_tar_stat.stat.size | int > 0
-              - smf_temporary_image_tar_stat.stat.checksum | length == 64
             fail_msg: "Docker did not create a valid SMF image archive."
+
+        - name: Calculate the SMF image archive SHA-256
+          ansible.builtin.command:
+            argv:
+              - sha256sum
+              - --
+              - "{{ smf_temporary_image_tar.path }}"
+          register: smf_temporary_image_tar_checksum
+          changed_when: false
+
+        - name: Verify the SMF image archive SHA-256 output
+          ansible.builtin.assert:
+            that:
+              - smf_temporary_image_tar_checksum.stdout is match('^[0-9a-f]{64}\\s+')
+            fail_msg: "sha256sum did not return a valid checksum for the SMF image archive."
 
         - name: Write the SMF image checksum manifest
           ansible.builtin.copy:
-            content: "{{ smf_temporary_image_tar_stat.stat.checksum }}  {{ SMF_IMAGE_TAR | basename }}\n"
+            content: "{{ smf_temporary_image_tar_checksum.stdout.split()[0] }}  {{ SMF_IMAGE_TAR | basename }}\n"
             dest: "{{ smf_temporary_image_tar_sha256.path }}"
             mode: "0644"
 

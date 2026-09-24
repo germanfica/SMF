@@ -19,6 +19,9 @@
     SMF_DB_USER: smf
     SMF_INSTALLER_ENABLED: false
     SMF_COMPOSE_TEMPLATE_SRC: "{{ playbook_dir }}/../templates/docker-compose.smf.yml.j2"
+    SMF_PUBLISHED_PORT: ""
+    SMF_COMPOSE_PATH: "{{ SMF_BASE_PATH }}/docker-compose.yml"
+    SMF_COMPOSE_OVERRIDE_PATH: "{{ SMF_BASE_PATH }}/docker-compose.smf.override.yml"
 
   pre_tasks:
     - name: Validate required deployment variables
@@ -36,10 +39,18 @@
           - SMF_DB_PASSWORD | length >= 24
           - SMF_MYSQL_ROOT_PASSWORD is defined
           - SMF_MYSQL_ROOT_PASSWORD | length >= 24
+          - >-
+            (SMF_PUBLISHED_PORT | string | length == 0) or
+            (
+              (SMF_PUBLISHED_PORT | string) is match('^[1-9][0-9]{0,4}$') and
+              (SMF_PUBLISHED_PORT | int) <= 65535
+            )
         fail_msg: >-
           Define SMF_IMAGE_NAME, SMF_IMAGE_TAG, SMF_IMAGE_TAR and
           SMF_IMAGE_TAR_SHA256 in Jenkins,
-          and keep SMF_DB_PASSWORD and SMF_MYSQL_ROOT_PASSWORD encrypted with Ansible Vault.
+          keep SMF_DB_PASSWORD and SMF_MYSQL_ROOT_PASSWORD encrypted with
+          Ansible Vault, and use a TCP port from 1 through 65535 when
+          SMF_PUBLISHED_PORT is set.
       no_log: true
 
     - name: Verify Docker Engine availability
@@ -49,14 +60,26 @@
           - version
       changed_when: false
 
-    - name: Verify Docker Compose plugin availability
+    - name: Read Docker Compose plugin version
       ansible.builtin.command:
         argv:
           - docker
           - compose
           - version
           - --short
+      register: smf_compose_version
       changed_when: false
+
+    - name: Require Docker Compose override support
+      ansible.builtin.assert:
+        that:
+          - >-
+            (smf_compose_version.stdout
+             | regex_replace('^[^0-9]*', '')
+             | regex_replace('[^0-9.].*$', '')) is version('2.24.4', '>=')
+        fail_msg: >-
+          SMF deployment requires Docker Compose 2.24.4 or newer so its
+          managed override can replace a previous host port safely.
 
     - name: Verify image archive on the Ansible control node
       ansible.builtin.stat:
@@ -207,10 +230,76 @@
       register: smf_mysql_pull
       changed_when: "'Downloaded newer image' in smf_mysql_pull.stdout"
 
+    - name: Select the SMF image for this deployment
+      ansible.builtin.set_fact:
+        smf_deployment_image: >-
+          {{
+            (SMF_IMAGE_NAME ~ ':' ~ SMF_IMAGE_TAG)
+            if (SMF_INSTALLER_ENABLED | bool)
+            else (SMF_IMAGE_NAME ~ ':' ~ SMF_IMAGE_TAG ~ '-installer-disabled')
+          }}
+
+    - name: Build an SMF image without the web installer
+      when: not (SMF_INSTALLER_ENABLED | bool)
+      block:
+        - name: Create a temporary build context for the disabled-installer image
+          ansible.builtin.tempfile:
+            state: directory
+            prefix: smf-installer-disabled-
+          register: smf_disabled_image_context
+
+        - name: Write the disabled-installer Dockerfile
+          ansible.builtin.copy:
+            content: |
+              ARG SMF_BASE_IMAGE
+              FROM ${SMF_BASE_IMAGE}
+              RUN rm -f /var/www/html/install.php
+              LABEL org.opencontainers.image.description="SMF image with install.php removed"
+            dest: "{{ smf_disabled_image_context.path }}/Dockerfile"
+            owner: root
+            group: root
+            mode: "0600"
+
+        - name: Build the disabled-installer SMF image
+          ansible.builtin.command:
+            argv:
+              - docker
+              - build
+              - --tag
+              - "{{ smf_deployment_image }}"
+              - --build-arg
+              - "SMF_BASE_IMAGE={{ SMF_IMAGE_NAME }}:{{ SMF_IMAGE_TAG }}"
+              - "{{ smf_disabled_image_context.path }}"
+          changed_when: true
+      always:
+        - name: Remove the temporary disabled-installer image context
+          ansible.builtin.file:
+            path: "{{ smf_disabled_image_context.path }}"
+            state: absent
+          when: smf_disabled_image_context.path is defined
+
     - name: Render SMF Docker Compose configuration
       ansible.builtin.template:
         src: "{{ SMF_COMPOSE_TEMPLATE_SRC }}"
-        dest: "{{ SMF_BASE_PATH }}/docker-compose.yml"
+        dest: "{{ SMF_COMPOSE_PATH }}"
+        owner: "{{ APP_USER }}"
+        group: "{{ APP_GROUP }}"
+        mode: "0600"
+
+    - name: Render SMF deployment Compose override
+      ansible.builtin.copy:
+        content: |
+          # Managed by install-smf.yml. Do not edit manually.
+          services:
+            smf:
+              image: "{{ smf_deployment_image }}"
+          {% if SMF_PUBLISHED_PORT | string | length > 0 %}
+              ports: !override
+                - "{{ SMF_PUBLISHED_PORT }}:80"
+          {% else %}
+              ports: !reset []
+          {% endif %}
+        dest: "{{ SMF_COMPOSE_OVERRIDE_PATH }}"
         owner: "{{ APP_USER }}"
         group: "{{ APP_GROUP }}"
         mode: "0600"
@@ -220,6 +309,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_OVERRIDE_PATH }}"
           - config
           - --quiet
         chdir: "{{ SMF_BASE_PATH }}"
@@ -230,6 +323,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_OVERRIDE_PATH }}"
           - create
         chdir: "{{ SMF_BASE_PATH }}"
       changed_when: true
@@ -239,6 +336,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_OVERRIDE_PATH }}"
           - run
           - --rm
           - --no-deps
@@ -256,6 +357,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_OVERRIDE_PATH }}"
           - run
           - --rm
           - --no-deps
@@ -273,6 +378,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_OVERRIDE_PATH }}"
           - up
           - --detach
           - --pull
@@ -289,6 +398,10 @@
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_OVERRIDE_PATH }}"
           - up
           - --detach
           - --pull
@@ -301,11 +414,73 @@
         chdir: "{{ SMF_BASE_PATH }}"
       changed_when: true
 
+    - name: Verify install.php was removed from the running SMF service
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_OVERRIDE_PATH }}"
+          - exec
+          - -T
+          - smf
+          - /bin/sh
+          - -ec
+          - "test ! -e /var/www/html/install.php"
+        chdir: "{{ SMF_BASE_PATH }}"
+      when: not (SMF_INSTALLER_ENABLED | bool)
+      changed_when: false
+
+    - name: Query the SMF host port publication
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_OVERRIDE_PATH }}"
+          - port
+          - smf
+          - "80"
+        chdir: "{{ SMF_BASE_PATH }}"
+      register: smf_published_port_query
+      changed_when: false
+      failed_when: false
+
+    - name: Verify the selected SMF host port is published
+      ansible.builtin.assert:
+        that:
+          - smf_published_port_query.rc == 0
+          - >-
+            (smf_published_port_query.stdout_lines
+             | select('match', '.*:' ~ (SMF_PUBLISHED_PORT | string) ~ '$')
+             | list | length) > 0
+        fail_msg: >-
+          SMF did not publish host port {{ SMF_PUBLISHED_PORT }} to its
+          container port 80.
+      when: SMF_PUBLISHED_PORT | string | length > 0
+
+    - name: Verify SMF has no published host port
+      ansible.builtin.assert:
+        that:
+          - smf_published_port_query.rc != 0
+        fail_msg: >-
+          SMF still has a host port published although Docker-network-only
+          exposure was selected.
+      when: SMF_PUBLISHED_PORT | string | length == 0
+
     - name: Show deployed SMF service state
       ansible.builtin.command:
         argv:
           - docker
           - compose
+          - --file
+          - "{{ SMF_COMPOSE_PATH }}"
+          - --file
+          - "{{ SMF_COMPOSE_OVERRIDE_PATH }}"
           - ps
         chdir: "{{ SMF_BASE_PATH }}"
       changed_when: false
