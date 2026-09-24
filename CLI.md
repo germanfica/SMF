@@ -33,6 +33,46 @@ Use another directory only when it is already appropriate for your PATH:
 The script does not elevate privileges itself. Use a writable directory or run
 the command through the privilege mechanism you selected.
 
+## Shell completion
+
+The installer also installs completion scripts for Bash and Zsh. They complete
+the supported command or option for the current position: `smf --` offers only
+global options, while `smf install --` offers only installation options. In
+particular, `--version` is deliberately not suggested after `install`.
+
+For an immediate Bash activation in the current shell, including completion of
+the checkout command `./smf`, run:
+
+```bash
+source "${BASH_COMPLETION_USER_DIR:-$HOME/.local/share/bash-completion}/completions/smf"
+```
+
+If you are using the checkout before running `installer.sh`, load its bundled
+script directly instead:
+
+```bash
+source completions/smf.bash
+```
+
+For Zsh, add the installation directory to `fpath` and initialize completion
+once in `.zshrc`:
+
+```zsh
+fpath=("${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions" $fpath)
+autoload -Uz compinit
+compinit
+```
+
+To activate the checkout script only for the current Zsh session, run:
+
+```zsh
+autoload -Uz compinit && compinit
+source completions/_smf
+```
+
+Use `./installer.sh --no-completions` when you do not want the installer to
+copy these scripts.
+
 ## Install SMF
 
 Run the CLI from the SMF checkout, or pass `--project-dir` explicitly. It looks

@@ -6,16 +6,22 @@ set -eu
 ProgramName="smf"
 SourceDirectoryPath=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 InstallationDirectoryPath="${SMF_INSTALL_DIR:-$HOME/.local/bin}"
+DataDirectoryPath="${XDG_DATA_HOME:-$HOME/.local/share}"
+BashCompletionRootPath="${BASH_COMPLETION_USER_DIR:-$DataDirectoryPath/bash-completion}"
+BashCompletionPath="$BashCompletionRootPath/completions/$ProgramName"
+ZshCompletionPath="$DataDirectoryPath/zsh/site-functions/_$ProgramName"
+InstallCompletions=true
 
 PrintUsage() {
   cat <<'EOF'
-Usage: ./installer.sh [--bin-dir PATH]
+Usage: ./installer.sh [--bin-dir PATH] [--no-completions]
 
 Builds the smf CLI from this checkout and installs or updates it.
 
 Options:
-  --bin-dir PATH  Install the binary in PATH instead of ~/.local/bin.
-  --help          Show this help.
+  --bin-dir PATH      Install the binary in PATH instead of ~/.local/bin.
+  --no-completions    Do not install Bash and Zsh completion scripts.
+  --help              Show this help.
 
 The script needs Go 1.17 or newer. It does not run the SMF deployment.
 EOF
@@ -30,6 +36,10 @@ while [ "$#" -gt 0 ]; do
       fi
       InstallationDirectoryPath="$2"
       shift 2
+      ;;
+    --no-completions)
+      InstallCompletions=false
+      shift
       ;;
     --help|-h)
       PrintUsage
@@ -65,7 +75,25 @@ go build \
 mkdir -p "$InstallationDirectoryPath"
 install -m 0755 "$TemporaryDirectoryPath/$ProgramName" "$InstallationDirectoryPath/$ProgramName"
 
+if [ "$InstallCompletions" = true ]; then
+  BashCompletionSourcePath="$SourceDirectoryPath/completions/$ProgramName.bash"
+  ZshCompletionSourcePath="$SourceDirectoryPath/completions/_$ProgramName"
+  if [ ! -r "$BashCompletionSourcePath" ] || [ ! -r "$ZshCompletionSourcePath" ]; then
+    printf '%s\n' 'installer.sh: bundled shell completion scripts are missing.' >&2
+    exit 1
+  fi
+
+  mkdir -p "$(dirname -- "$BashCompletionPath")" "$(dirname -- "$ZshCompletionPath")"
+  install -m 0644 "$BashCompletionSourcePath" "$BashCompletionPath"
+  install -m 0644 "$ZshCompletionSourcePath" "$ZshCompletionPath"
+fi
+
 printf 'Installed %s (%s) in %s\n' "$ProgramName" "$BuildVersion" "$InstallationDirectoryPath"
+if [ "$InstallCompletions" = true ]; then
+  printf 'Installed Bash completion in %s\n' "$BashCompletionPath"
+  printf 'Installed Zsh completion in %s\n' "$ZshCompletionPath"
+  printf '%s\n' 'Start a new Bash shell, or follow the Bash and Zsh activation commands in CLI.md.'
+fi
 case ":${PATH}:" in
   *":${InstallationDirectoryPath}:"*) ;;
   *)
