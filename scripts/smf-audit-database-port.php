@@ -61,7 +61,7 @@ function smfDatabaseAuditExcerpt($value, $port)
 
 function smfDatabaseAuditRedactSensitiveValues($excerpt)
 {
-	$sensitiveName = '(?:webmaster_email|[A-Za-z_][A-Za-z0-9_-]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?key|webhook)[A-Za-z0-9_-]*)';
+	$sensitiveName = '(?:webmaster_email|email|ip2?|login_[A-Za-z0-9_-]+|[A-Za-z_][A-Za-z0-9_-]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?key|webhook|cookie)[A-Za-z0-9_-]*)';
 	$excerpt = preg_replace_callback(
 		'#(\$' . $sensitiveName . '\s*=\s*)([\'\"])(?:\\\\.|(?!\2).)*\2#is',
 		function ($match) {
@@ -84,10 +84,45 @@ function smfDatabaseAuditRedactSensitiveValues($excerpt)
 		$excerpt
 	);
 
+	$excerpt = smfDatabaseAuditRedactSerializedSensitiveValues($excerpt, $sensitiveName);
+
+	return smfDatabaseAuditRedactIpAddresses($excerpt);
+}
+
+function smfDatabaseAuditRedactSerializedSensitiveValues($excerpt, $sensitiveName)
+{
+	$pattern = '#s:\d+:"' . $sensitiveName . '";s:(\d+):"#i';
+	$searchOffset = 0;
+	while (preg_match($pattern, $excerpt, $match, PREG_OFFSET_CAPTURE, $searchOffset) === 1) {
+		$prefix = $match[0][0];
+		$prefixOffset = $match[0][1];
+		$valueLength = (int) $match[1][0];
+		$valueOffset = $prefixOffset + strlen($prefix);
+		$valueEndOffset = $valueOffset + $valueLength;
+		if ($valueEndOffset >= strlen($excerpt) || substr($excerpt, $valueEndOffset, 2) !== '";') {
+			$searchOffset = $valueOffset;
+			continue;
+		}
+
+		$excerpt = substr($excerpt, 0, $valueOffset) . '****' . substr($excerpt, $valueEndOffset);
+		$searchOffset = $valueOffset + 6;
+	}
+
+	return $excerpt;
+}
+
+function smfDatabaseAuditRedactIpAddresses($excerpt)
+{
+	$excerpt = preg_replace(
+		'/(?<![0-9])(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})){3}(?![0-9])/',
+		'****',
+		$excerpt
+	);
+
 	return preg_replace_callback(
-		'#(s:\d+:"' . $sensitiveName . '";s:\d+:")[^"]*(")#i',
+		'/(?<![0-9A-Fa-f:.])[0-9A-Fa-f:.]{2,45}(?![0-9A-Fa-f:.])/',
 		function ($match) {
-			return $match[1] . '****' . $match[2];
+			return filter_var($match[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? '****' : $match[0];
 		},
 		$excerpt
 	);
@@ -96,7 +131,7 @@ function smfDatabaseAuditRedactSensitiveValues($excerpt)
 function smfDatabaseAuditRedactRowIdentity($rowIdentity)
 {
 	foreach ($rowIdentity as $name => $value) {
-		if (preg_match('/(?:session|password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?key|webhook)/i', $name)) {
+		if ((is_string($value) && filter_var($value, FILTER_VALIDATE_IP) !== false) || preg_match('/(?:session|password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?key|webhook|cookie)/i', $name)) {
 			$rowIdentity[$name] = '****';
 		}
 	}
